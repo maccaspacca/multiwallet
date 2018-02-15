@@ -1,7 +1,7 @@
 """
  Bismuth Multiple Address Wallet (Procedures Module)
- Version 0.0.1 (Test)
- Date 14/02/2018
+ Version 0.0.2 (Test)
+ Date 15/02/2018
  Copyright Maccaspacca 2018
  Copyright Hclivess 2016 to 2018
  Author Maccaspacca
@@ -50,15 +50,13 @@ def checkstart():
 
 	if not os.path.exists('wallet.dat'):
 		# create empty wallet database
-		logging.info("Wallet DB: Create New as none exists")
 		wlist = sqlite3.connect('wallet.dat')
 		wlist.text_factory = str
 		w = wlist.cursor()
 		w.execute("CREATE TABLE IF NOT EXISTS wallet (address, privkey, pubkey, crypted)")
-		new_keys = generate()
-		w.execute("INSERT INTO wallet VALUES (?,?,?,?)", (str(new_keys[2]),str(new_keys[0]),str(new_keys[1]),'0'))
 		wlist.commit()
 		wlist.close()
+		generate()
 		# create empty wallet database
 
 def readcrypt(myaddress): # check encryption status of an address in the wallet

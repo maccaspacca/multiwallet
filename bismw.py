@@ -1,7 +1,7 @@
 """
  Bismuth Multiple Address Wallet
- Version 0.0.1 (Test)
- Date 14/02/2018
+ Version 0.0.2 (Test)
+ Date 15/02/2018
  Copyright Maccaspacca 2018
  Copyright Hclivess 2016 to 2018
  Author Maccaspacca
@@ -39,7 +39,6 @@ while do_bal:
 	iscrypted = mwprocs.readcrypt(address)
 	my_pkc = int(iscrypted[0][0])
 
-	#(key, private_key_readable, public_key_readable, public_key_hashed, address, my_pkc) = mwprocs.read(curr_address)
 	
 	(debit,fees,rewards,credit,balance) = mwprocs.get_stats(address)
 
