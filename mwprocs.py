@@ -1,48 +1,151 @@
 """
  Bismuth Multiple Address Wallet (Procedures Module)
- Version 0.0.2 (Test)
- Date 15/02/2018
+ Version 0.0.3 (Dev)
+ Date 24/03/2018
  Copyright Maccaspacca 2018
- Copyright Hclivess 2016 to 2018
+ Copyright Bismuth Foundation 2016 to 2018
  Author Maccaspacca
 """
 
-import base64, os, sys, getpass, hashlib, sqlite3, time, options
-from Crypto import Random
+import base64, os, sys, getpass, hashlib, sqlite3, time, logging, wx, pathlib
 from simplecrypt import encrypt, decrypt
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA
+from Crypto.Protocol.KDF import PBKDF2
+from libs.mnemonic import Mnemonic
+from libs.rsa_py import rsa_functions
+from logging.handlers import RotatingFileHandler
 
-config = options.Get()
-config.read()
-full_ledger = config.full_ledger_conf
-ledger_path = config.ledger_path_conf
-hyper_path = config.hyper_path_conf
+# setup logging
+log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
+logFile = 'procs.log'
+my_handler = RotatingFileHandler(logFile, mode='a', maxBytes=5 * 1024 * 1024, backupCount=2, encoding=None, delay=0)
+my_handler.setFormatter(log_formatter)
+my_handler.setLevel(logging.INFO)
+app_log = logging.getLogger('root')
+app_log.setLevel(logging.INFO)
+app_log.addHandler(my_handler)
 
-def generate():
+
+def imp_seed(mseed,mpass):
 
 	try:
-		# generate key pair and an address
-		key = RSA.generate(4096)
-		#public_key = key.publickey()
+	
+		# some predefined variables to keep parity with jimhsu code
+		
+		#mnemo = Mnemonic('english')
+		iterations = 20000
+		length = 48
+		n = 4096
+		cointype = 209 # Provisionally, 209 (atomic weight of bismuth) (see https://github.com/satoshilabs/slips/blob/master/slip-0044.md )
+		aid = 1
+		addrs = 1
+
+		# key generation
+
+		address = ""
+		#pwd_a = mnemo.generate(strength=256)
+		pwd_a = mseed
+
+		app_log.info("Imported seed = {}".format(pwd_a))
+		passphrase = mpass
+		passP = "mnemonic" + passphrase
+
+		master_key = PBKDF2(pwd_a.encode('utf-8'), passP.encode('utf-8'), dkLen=length, count=iterations)
+		#print("Master key: " + str(base64.b64encode(master_key)))
+
+		deriv_path = "m/44'/"+ str(cointype) +"'/" + str(aid) + "'/0/" + str(addrs) #HD path
+
+		account_key = PBKDF2(master_key, deriv_path.encode('utf-8'), dkLen=length, count=1)
+		#print("Account key: " + str(base64.b64encode(account_key)))
+
+		rsa = rsa_functions.RSAPy(n,account_key)
+		key = RSA.construct(rsa.keypair)
 
 		private_key_readable = key.exportKey().decode("utf-8")
 		public_key_readable = key.publickey().exportKey().decode("utf-8")
 		address = hashlib.sha224(public_key_readable.encode("utf-8")).hexdigest()  # hashed public key
 		
+		app_log.info('Imported address: {} from seed'.format(address))
+		
 		wlist = sqlite3.connect('wallet.dat')
 		wlist.text_factory = str
 		w = wlist.cursor()
-		w.execute("INSERT INTO wallet VALUES (?,?,?,?)", (str(address),str(private_key_readable),str(public_key_readable),'0'))
+		w.execute("INSERT INTO wallet VALUES (?,?,?,?,?,?,?)", (str(address),str(private_key_readable),str(public_key_readable),'0','',pwd_a,'1'))
 		wlist.commit()
 		wlist.close()
-	
-		return True
+		
+		app_log.info('Inserted imported address into wallet.dat')
+
+		return True,address,pwd_a
 		
 	except:
 	
-		return False
+		return False,"",""
+
+
+def generate():
+
+	from tkinter import Tk
+	import tkinter.simpledialog as sdlg
+	root = Tk()
+	root.withdraw()
+
+	try:
+	
+		# some predefined variables to keep parity with jimhsu code
+		
+		passphrase = sdlg.askstring("New address creation", "Enter optional seed password. WARNING this is not stored. Click OK for none", show='*')
+		
+		mnemo = Mnemonic('english')
+		iterations = 20000
+		length = 48
+		n = 4096
+		cointype = 209 # Provisionally, 209 (atomic weight of bismuth) (see https://github.com/satoshilabs/slips/blob/master/slip-0044.md )
+		aid = 1
+		addrs = 1
+
+		# key generation
+
+		address = ""
+		pwd_a = mnemo.generate(strength=256)
+
+		app_log.info("Mnemonic (seed) = {}".format(pwd_a))
+		#passphrase = ""
+		passP = "mnemonic" + passphrase
+
+		master_key = PBKDF2(pwd_a.encode('utf-8'), passP.encode('utf-8'), dkLen=length, count=iterations)
+		#print("Master key: " + str(base64.b64encode(master_key)))
+
+		deriv_path = "m/44'/"+ str(cointype) +"'/" + str(aid) + "'/0/" + str(addrs) #HD path
+
+		account_key = PBKDF2(master_key, deriv_path.encode('utf-8'), dkLen=length, count=1)
+		#print("Account key: " + str(base64.b64encode(account_key)))
+
+		rsa = rsa_functions.RSAPy(n,account_key)
+		key = RSA.construct(rsa.keypair)
+
+		private_key_readable = key.exportKey().decode("utf-8")
+		public_key_readable = key.publickey().exportKey().decode("utf-8")
+		address = hashlib.sha224(public_key_readable.encode("utf-8")).hexdigest()  # hashed public key
+		
+		app_log.info('Generated address: {}'.format(address))
+		
+		wlist = sqlite3.connect('wallet.dat')
+		wlist.text_factory = str
+		w = wlist.cursor()
+		w.execute("INSERT INTO wallet VALUES (?,?,?,?,?,?,?)", (str(address),str(private_key_readable),str(public_key_readable),'0','',pwd_a,'1'))
+		wlist.commit()
+		wlist.close()
+		
+		app_log.info('Inserted new address into wallet.dat')
+	
+		return True,address,pwd_a
+		
+	except:
+	
+		return False,"",""
 
 def checkstart():
 
@@ -53,18 +156,18 @@ def checkstart():
 		wlist = sqlite3.connect('wallet.dat')
 		wlist.text_factory = str
 		w = wlist.cursor()
-		w.execute("CREATE TABLE IF NOT EXISTS wallet (address, privkey, pubkey, crypted)")
+		w.execute("CREATE TABLE IF NOT EXISTS wallet (address, privkey, pubkey, crypted, account, seed, hd)")
 		wlist.commit()
 		wlist.close()
 		generate()
-		# create empty wallet database
+		# create empty wallet database and add first address
 
 def readcrypt(myaddress): # check encryption status of an address in the wallet
 
 	cwallet = sqlite3.connect('wallet.dat')
 	cwallet.text_factory = str
 	c = cwallet.cursor()
-	c.execute("SELECT crypted FROM wallet WHERE address =?;", (myaddress,))
+	c.execute("SELECT crypted,hd FROM wallet WHERE address =?;", (myaddress,))
 	iscrypted = c.fetchall()
 	cwallet.close()
 	
@@ -97,24 +200,38 @@ def readpriv(myaddress): # gets the private key and encryption status of an addr
 	rwallet = sqlite3.connect('wallet.dat')
 	rwallet.text_factory = str
 	r = rwallet.cursor()
-	r.execute("SELECT privkey,crypted FROM wallet WHERE address = ?;", (myaddress,))
+	r.execute("SELECT privkey,crypted,seed FROM wallet WHERE address = ?;", (myaddress,))
 	rkeys = r.fetchone()
 	rwallet.close()
+	#print(rkeys[2])
 	
 	return rkeys
 
-def dec_key(address): # decrypts an encrypted private key for an address in the wallet returning the signing key and private key
+def dec_key(address): # decrypts an encrypted private key for an address in the wallet returning the signing key, private key and seed
 
-	password = getpass.getpass()
-	encrypted_privkey = readpriv(address)
-	decrypted_privkey = (decrypt(password, encrypted_privkey[0]).decode("utf-8"))
-	#print(decrypted_privkey)
-	key = RSA.importKey(decrypted_privkey)  # for signing
-	#print(key)
+	try:
+		dlgs = wx.PasswordEntryDialog(None, 'Insert password for address:\n{}'.format(address), 'Decrypting things for you....', '', style=wx.TextEntryDialogStyle)
+		if dlgs.ShowModal() == wx.ID_OK:
+			password = str(dlgs.GetValue())
+		else:
+			password = ""
+		dlgs.Destroy()
+		busyDlg = wx.BusyInfo("Busy decrypting {} !".format(address))
+		encrypted_privkey = readpriv(address)
+		decrypted_privkey = (decrypt(password, encrypted_privkey[0]).decode("utf-8"))
+		decrypted_seed = (decrypt(password, encrypted_privkey[2]).decode("utf-8"))
+		#print(decrypted_privkey)
+		key = RSA.importKey(decrypted_privkey)  # for signing
+		#print(key)
+	except:
+		key = "Incorrect password"
+		decrypted_privkey = False
+		decrypted_seed = "Incorrect password"
 	
-	password = ""
+	password = None
+	busyDlg = None
 	
-	return key, decrypted_privkey
+	return key, decrypted_privkey, decrypted_seed
 
 def read(curr_address): # the equivalent of keys.read in the default wallet
 
@@ -128,11 +245,13 @@ def read(curr_address): # the equivalent of keys.read in the default wallet
 		decoded_keys = dec_key(curr_address)
 		private_key_readable = decoded_keys[1]
 		key = decoded_keys[0]
+		seed = decoded_keys[2]
 		#print(private_key_readable)
 		#print(key)
 	else:
 		private_key_readable = my_pk
 		key = RSA.importKey(private_key_readable)  # for signing
+		seed = myprivs[2]
 		#print(private_key_readable)
 		#print(key)
 
@@ -146,38 +265,51 @@ def read(curr_address): # the equivalent of keys.read in the default wallet
 	address = hashlib.sha224(public_key_readable.encode("utf-8")).hexdigest()
 	# import keys
 
-	return key, private_key_readable, public_key_readable, public_key_hashed, address, my_pkc
+	return key, private_key_readable, public_key_readable, public_key_hashed, address, my_pkc, seed
 	
-def writepriv(newkey,myaddress): # writes the encrypted private key to an address in the wallet
+def writepriv(newkey,myaddress,newseed, mystate): # writes the private key to an address in the wallet
 
 	wwallet = sqlite3.connect('wallet.dat')
 	wwallet.text_factory = str
 	w = wwallet.cursor()
-	w.execute("UPDATE wallet SET privkey = ?,crypted = 1 WHERE address = ?;", (newkey,myaddress))
+	w.execute("UPDATE wallet SET privkey = ?,crypted = ?,seed = ? WHERE address = ?;", (newkey,mystate,newseed,myaddress))
 	wwallet.commit()
 	wwallet.close()
 	
-def enc_key(address): # encrypts the private key for an address in the wallet
+def enc_key(address): # encrypts the private key and seed string for an address in the wallet
 
 	goodpass = False
+	from tkinter import Tk
+	import tkinter.simpledialog as sdlg
+	import tkinter.messagebox as mdlg
+	root = Tk()
+	root.withdraw()
 	
 	x = 0
 	while x < 3:
-		input_password1 = getpass.getpass()
-		print("Thanks, confirm password")
-		input_password2 = getpass.getpass()
-		
-		if input_password1 == input_password2:
-			privkey_not = readpriv(address)
-			#print("{}......".format(str(privkey_not[0])))
-			ciphertext = encrypt(input_password1, str(privkey_not[0]))
-			writepriv(ciphertext,address)
-			goodpass = True
-			x = 3
-		else:
-			print("passwords do not match - try again\n")
-			x +=1
 	
+		try:
+		
+			input_password1 = sdlg.askstring("Password", "Try {} of 3 - Please enter your password:".format(str(x+1)), show='*')
+			input_password2 = sdlg.askstring("Password", "Try {} of 3 - Please confirm the password:".format(str(x+1)), show='*')
+			#root.destroy()
+			if input_password1 == input_password2:
+				privkey_not = readpriv(address)
+				ciphertext = encrypt(input_password1, str(privkey_not[0]))
+				if str(privkey_not[2]) == " ":
+					seedtext = "traditional key no seed for this address"
+				else:
+					seedtext = encrypt(input_password1, str(privkey_not[2]))
+				writepriv(ciphertext,address,seedtext,"1")
+				goodpass = True
+				x = 3
+			else:
+				mdlg.showerror("Error", "Passwords Do Not Match !!!")
+				x +=1
+				
+		except:
+			x +=1
+			
 	input_password1 = ""
 	input_password2 = ""
 	
@@ -186,118 +318,94 @@ def enc_key(address): # encrypts the private key for an address in the wallet
 	else:
 		return False
 		
-def get_stats(address): # gets the financial statistics for an address in the wallet.
+def dec_all(address): # decrypts the private key and seed string for an address in the wallet
 
-	mempool = sqlite3.connect('mempool.db')
-	mempool.text_factory = str
-	m = mempool.cursor()
+	goodpass = False
+	from tkinter import Tk
+	import tkinter.simpledialog as sdlg
+	import tkinter.messagebox as mdlg
+	root = Tk()
+	root.withdraw()
+	
+	x = 0
+	while x < 3:
+	
+		try:
+		
+			password = sdlg.askstring("Password", "Try {} of 3 - Please enter your password:".format(str(x+1)), show='*')
+			#root.destroy()
+			encrypted_privkey = readpriv(address)
+			decrypted_privkey = (decrypt(password, encrypted_privkey[0]).decode("utf-8"))
+			decrypted_seed = (decrypt(password, encrypted_privkey[2]).decode("utf-8"))
+				
+			writepriv(decrypted_privkey,address,decrypted_seed,"0")
+			goodpass = True
+			x = 3
 
-	# include mempool fees
-	m.execute("SELECT count(amount), sum(amount) FROM transactions WHERE address = ?;", (address,))
-	result = m.fetchall()[0]
-	if result[1] != None:
-		debit_mempool = float('%.8f' % (float(result[1]) + float(result[1]) * 0.001 + int(result[0]) * 0.01))
+		except:
+			x +=1
+			goodpass = False
+			
+	password = ""
+	
+	if goodpass:
+		return True
 	else:
-		debit_mempool = 0
-	# include mempool fees
-
-	if full_ledger == 1:
-		conn = sqlite3.connect(ledger_path)
-	else:
-		conn = sqlite3.connect(hyper_path)
-
-	conn.text_factory = str
-	c = conn.cursor()
-	c.execute("SELECT sum(amount) FROM transactions WHERE recipient = ?;", (address,))
-	credit = c.fetchone()[0]
-	c.execute("SELECT sum(amount) FROM transactions WHERE address = ?;", (address,))
-	debit = c.fetchone()[0]
-	c.execute("SELECT sum(fee) FROM transactions WHERE address = ?;", (address,))
-	fees = c.fetchone()[0]
-	c.execute("SELECT sum(reward) FROM transactions WHERE address = ?;", (address,))
-	rewards = c.fetchone()[0]
-	c.execute("SELECT MAX(block_height) FROM transactions")
-	bl_height = c.fetchone()[0]
-
-	debit = 0 if debit is None else float('%.8f' % debit)
-	fees = 0 if fees is None else float('%.8f' % fees)
-	rewards = 0 if rewards is None else float('%.8f' % rewards)
-	credit = 0 if credit is None else float('%.8f' % credit)
-
-	balance = '%.8f' % (credit - debit - fees + rewards - debit_mempool)
-	
-	return debit,fees,rewards,credit,balance
-
-def send_bis(myaddress): # sends bismuth from a selected address in the wallet
-	
-	(key, private_key_readable, public_key_readable, public_key_hashed, address, my_pkc) = read(myaddress)
-	(debit,fees,rewards,credit,balance) = get_stats(myaddress)
-	
-	amount_input = input("Amount to send: ")
-
-	recipient_input = input("Recipient address: ")
-
-	keep_input = 0
-
-	openfield_input = input("Enter openfield data (message): ")
-	
-	fee = '%.8f' % float(0.01 + (float(len(openfield_input)) / 100000) + int(keep_input))  # 0.01 dust
-	print("Fee: %s" % fee)
-
-	confirm = input("Confirm (y/n): ")
-
-	if confirm != 'y':
-		print("Transaction cancelled, user confirmation failed")
-		exit(1)
-
-	# hardfork fee display
-	try:
-		float(amount_input)
-		is_float = 1
-	except ValueError:
-		is_float = 0
-		exit(1)
-
-	if len(str(recipient_input)) != 56:
-		print("Wrong address length")
 		return False
+		
+def delete_add(myaddress):
+
+	good_delete = False
+	
+	try:
+		dwallet = sqlite3.connect('wallet.dat')
+		dwallet.text_factory = str
+		d = dwallet.cursor()
+		d.execute("DELETE FROM wallet WHERE address = ?;", (myaddress,))
+		dwallet.commit()
+		dwallet.close()
+		good_delete = True
+	except:
+		good_delete = False
+		
+	if good_delete:
+		return True
 	else:
-		timestamp = '%.2f' % time.time()
-		transaction = (str(timestamp), str(address), str(recipient_input), '%.8f' % float(amount_input), str(keep_input), str(openfield_input))  # this is signed
-		# print transaction
+		return False
+		
+def read_exp():
 
-		h = SHA.new(str(transaction).encode("utf-8"))
-		signer = PKCS1_v1_5.new(key)
-		signature = signer.sign(h)
-		signature_enc = base64.b64encode(signature)
-		txid = signature_enc[:56]
-
-		print("Encoded Signature: %s" % signature_enc.decode("utf-8"))
-		print("Transaction ID: %s" % txid.decode("utf-8"))
-
-		verifier = PKCS1_v1_5.new(key)
-
-		if verifier.verify(h, signature):
-			if float(amount_input) < 0:
-				print("Signature OK, but cannot use negative amounts")
-				return False
-
-			elif float(amount_input) + float(fee) > float(balance):
-				print("Mempool: Sending more than owned")
-				return False
-
-			else:
-				print("The signature is valid, proceeding to save transaction to mempool")
-				mempool = sqlite3.connect('mempool.db')
-				mempool.text_factory = str
-				m = mempool.cursor()
-				m.execute("INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?)", (str(timestamp), str(address), str(recipient_input), '%.8f' % float(amount_input), str(signature_enc.decode("utf-8")), str(public_key_hashed), str(keep_input), str(openfield_input)))
-				mempool.commit()  # Save (commit) the changes
-				mempool.close()
-				print("Mempool updated with a received transaction")
-				return True
-				# refresh() experimentally disabled
-		else:
-			print("Invalid signature")
-			return False
-			# enter transaction end
+	ewallet = sqlite3.connect('wallet.dat')
+	ewallet.text_factory = str
+	e = ewallet.cursor()
+	e.execute("SELECT address,crypted,seed,hd FROM wallet;")
+	s_exp = e.fetchall()
+	ewallet.close()
+	
+	timestamp = '%.0f' % time.time()
+	pathlib.Path('export').mkdir(parents=True, exist_ok=True)
+	filepath = "export/expseed_{}.txt".format(timestamp)
+	
+	try:
+		with open(filepath, 'w') as file_handler:
+			for ex in s_exp:
+			
+				if ex[3] == "1":
+					t_write = True
+					if ex[1] == "0":
+						ex_seed = ex[2]
+					else:
+						ex_temp = dec_key(ex[0])
+						ex_seed = ex_temp[2]
+				else:
+					t_write = False
+							
+				if t_write:
+					ex_write = "{},{}".format(str(ex[0]),ex_seed)
+					file_handler.write("{}\n".format(ex_write))
+		
+		return True,filepath
+	
+	except:
+		return False,"error"
+		
