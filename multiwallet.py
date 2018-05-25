@@ -1,7 +1,7 @@
 """
  Bismuth GUI Multiple Address Wallet
- Version Test 0.1
- Date 22nd May 2018
+ Version Test 0.11
+ Date 24th May 2018
  Copyright Maccaspacca 2018
  Copyright Bismuth Foundation 2016 to 2018
  Author Ian McEvoy (Maccaspacca)
@@ -25,9 +25,9 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA
 
-mw_version = "Test 0.1"
+mw_version = "Test 0.11"
 mw_copy = "The Bismuth Foundation 2018"
-mw_date = "22nd May 2018"
+mw_date = "24th May 2018"
 mw_author = "Ian McEvoy (Maccaspacca)"
 mw_license = "GPL-3.0"
 
@@ -151,7 +151,7 @@ a_txt = "Version: {}\nAuthor: {}\nCopyright: {}\nPublished: {}\nLicense: {}".for
 
 w_txt = """1. Select an address from the drop down list.
 		2. Click on a transaction in the list to get more information.
-		3. Information refreshes every 5 minutes."""
+		3. Information refreshes every 10 seconds."""
 
 def updatestatus(newstatus,newplace):
 	evt = UpdateStatusEvent(msg = newstatus, st_id = int(newplace))
@@ -867,6 +867,9 @@ class PageThree(wx.Panel):
 		
 		self.DoAddys()
 		
+		self.myaddress = self.alladdys[0] # uses first address if none selected
+		self.MyTickState = False
+		
 		l_text1 = wx.StaticText(self, -1, "Send Bismuth")
 		l_text1.SetFont(wx.Font(14, wx.SWISS, wx.NORMAL, wx.BOLD))
 		l_text1.SetSize(l_text1.GetBestSize())
@@ -885,6 +888,7 @@ class PageThree(wx.Panel):
 		
 		self.l = wx.ComboBox(self, -1, size=(-1, -1), choices=self.alladdys, style=wx.CB_READONLY) # address list
 		self.Bind(wx.EVT_COMBOBOX, self.OnSelect, self.l)
+		self.Bind(wx.EVT_COMBOBOX_DROPDOWN, self.OnDrop, self.l)
 		self.l.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.NORMAL))
 		self.l.SetForegroundColour(wx.BLACK)
 		self.l.SetBackgroundColour(wx.WHITE)
@@ -1133,6 +1137,11 @@ class PageThree(wx.Panel):
 			#self.fees = "0"
 
 		self.l_text3.SetLabel("Amount to send ({} BIS available)".format(self.balance))
+		
+	def OnDrop(self, event):
+		self.DoAddys()
+		self.l.SetItems(self.alladdys)
+		self.l.SetValue(self.myaddress)
 			
 	def cleantxt(self):
 		self.l_text7.SetLabel("")
