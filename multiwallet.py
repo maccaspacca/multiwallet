@@ -1,7 +1,7 @@
 """
  Bismuth GUI Multiple Address Wallet
- Version Test 0.11
- Date 24th May 2018
+ Version Test 0.12
+ Date 29th May 2018
  Copyright Maccaspacca 2018
  Copyright Bismuth Foundation 2016 to 2018
  Author Ian McEvoy (Maccaspacca)
@@ -35,7 +35,7 @@ mwprocs.checkstart()
 
 if not os.path.exists('config.dat'):
 
-	# Create text inputs - coded to testnet for test version
+	# Create text inputs - coded to testnet for test version - REMEMBER TO CHANGE
 	debug_level = "WARNING"
 	port = "2829"
 	light_ip = "127.0.0.1"
@@ -90,7 +90,7 @@ mytitle = "Bismuth Multiwallet"
 if "testnet" in version:
 	port = 2829
 	mytitle = "Bismuth Multiwallet TESTNET"
-	light_ip = ["127.0.0.1"]
+	#light_ip = ["127.0.0.1"]
 
 addylist = mwprocs.readaddys() #reads all addresses from wallet.dat
 
@@ -866,7 +866,7 @@ class PageThree(wx.Panel):
 		wx.Panel.__init__(self, parent)
 		
 		self.DoAddys()
-		
+	
 		self.myaddress = self.alladdys[0] # uses first address if none selected
 		self.MyTickState = False
 		
@@ -991,6 +991,7 @@ class PageThree(wx.Panel):
 		box1.Add(vbox2, 0, wx.ALL|wx.CENTER, 2)
 
 		self.SetSizer(box1)
+		self.OnSelect(self.l)
 
 	def OnSubmit(self, event):
 	
@@ -1073,6 +1074,7 @@ class PageThree(wx.Panel):
 			self.lt3.SetValue("")
 			s_result = send_bis(address,amdo,addo,openfield_input,keep_input)
 			mydone = s_result[0]
+			print(s_result)
 			if mydone:
 				self.l_text7.SetForegroundColour("#08750A")
 				self.l_text7.SetLabel("Transaction complete")
@@ -1595,6 +1597,7 @@ class MainFrame(wx.Frame):
 
 
 	def OnQuit(self, event):
+		s.close()
 		self.Close()
 		
 	def OnClick(self, event):
