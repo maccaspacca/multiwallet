@@ -1,7 +1,7 @@
 """
  Bismuth Multiple Address Wallet (Procedures Module)
- Version 0.0.3 (Dev)
- Date 24/03/2018
+ Version 0.0.4 (Dev)
+ Date 03/06/2018
  Copyright Maccaspacca 2018
  Copyright Bismuth Foundation 2016 to 2018
  Author Maccaspacca
@@ -96,7 +96,12 @@ def generate():
 	
 		# some predefined variables to keep parity with jimhsu code
 		
-		passphrase = sdlg.askstring("New address creation", "Enter optional seed password. WARNING this is not stored. Click OK for none", show='*')
+		create_text = "Your new address is being created from seed\n"\
+					"You can enter an optional seed password.\n"\
+					"WARNING this is not stored so you will need to remember it !\n"\
+					"Click OK when entered or if you want none set"
+		
+		passphrase = sdlg.askstring("New address creation",create_text, show='*')
 		
 		mnemo = Mnemonic('english')
 		iterations = 20000
@@ -279,21 +284,27 @@ def writepriv(newkey,myaddress,newseed, mystate): # writes the private key to an
 def enc_key(address): # encrypts the private key and seed string for an address in the wallet
 
 	goodpass = False
-	from tkinter import Tk
-	import tkinter.simpledialog as sdlg
-	import tkinter.messagebox as mdlg
-	root = Tk()
-	root.withdraw()
-	
 	x = 0
+	
 	while x < 3:
 	
 		try:
 		
-			input_password1 = sdlg.askstring("Password", "Try {} of 3 - Please enter your password:".format(str(x+1)), show='*')
-			input_password2 = sdlg.askstring("Password", "Try {} of 3 - Please confirm the password:".format(str(x+1)), show='*')
-			#root.destroy()
+			dlgs = wx.PasswordEntryDialog(None, 'Try {} of 3 - Please enter encryption password:'.format(str(x+1)), 'Password Input', '', style=wx.TextEntryDialogStyle)
+			if dlgs.ShowModal() == wx.ID_OK:
+				input_password1 = str(dlgs.GetValue())
+			else:
+				input_password1 = "x"
+			dlgs = wx.PasswordEntryDialog(None, 'Try {} of 3 - Please confirm the password:'.format(str(x+1)), 'Password Input', '', style=wx.TextEntryDialogStyle)
+			if dlgs.ShowModal() == wx.ID_OK:
+				input_password2 = str(dlgs.GetValue())
+			else:
+				input_password2 = "y"
+			
+			dlgs.Destroy()
+		
 			if input_password1 == input_password2:
+				busyDlg = wx.BusyInfo("Busy encrypting {} !".format(address))
 				privkey_not = readpriv(address)
 				ciphertext = encrypt(input_password1, str(privkey_not[0]))
 				if str(privkey_not[2]) == " ":
@@ -304,8 +315,12 @@ def enc_key(address): # encrypts the private key and seed string for an address 
 				goodpass = True
 				x = 3
 			else:
-				mdlg.showerror("Error", "Passwords Do Not Match !!!")
+				msgbox = wx.MessageDialog(None,"Passwords Do Not Match !!!","Encrypting address",wx.ICON_ERROR)
+				msgbox.ShowModal()
+				msgbox.Destroy()
 				x +=1
+			
+			busyDlg = None
 				
 		except:
 			x +=1
@@ -321,28 +336,30 @@ def enc_key(address): # encrypts the private key and seed string for an address 
 def dec_all(address): # decrypts the private key and seed string for an address in the wallet
 
 	goodpass = False
-	from tkinter import Tk
-	import tkinter.simpledialog as sdlg
-	import tkinter.messagebox as mdlg
-	root = Tk()
-	root.withdraw()
 	
 	x = 0
 	while x < 3:
 	
 		try:
 		
-			password = sdlg.askstring("Password", "Try {} of 3 - Please enter your password:".format(str(x+1)), show='*')
-			#root.destroy()
+			dlgs = wx.PasswordEntryDialog(None, 'Try {} of 3 - Please enter your decryption password:'.format(str(x+1)), 'Password Input', '', style=wx.TextEntryDialogStyle)
+			if dlgs.ShowModal() == wx.ID_OK:
+				password = str(dlgs.GetValue())
+			else:
+				password = "x"
+		
+			busyDlg = wx.BusyInfo("Busy decrypting.......")
 			encrypted_privkey = readpriv(address)
 			decrypted_privkey = (decrypt(password, encrypted_privkey[0]).decode("utf-8"))
 			decrypted_seed = (decrypt(password, encrypted_privkey[2]).decode("utf-8"))
+			busyDlg = None
 				
 			writepriv(decrypted_privkey,address,decrypted_seed,"0")
 			goodpass = True
 			x = 3
 
 		except:
+			busyDlg = None
 			x +=1
 			goodpass = False
 			

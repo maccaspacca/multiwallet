@@ -1,7 +1,7 @@
 """
  Bismuth GUI Multiple Address Wallet
- Version Test 0.12
- Date 29th May 2018
+ Version Test 0.13
+ Date 3rd June 2018
  Copyright Maccaspacca 2018
  Copyright Bismuth Foundation 2016 to 2018
  Author Ian McEvoy (Maccaspacca)
@@ -14,7 +14,7 @@ import wx.lib.plot as plot
 import  wx.lib.newevent
 from wx.lib.masked import NumCtrl
 import configparser as cp
-import time, re, os, sys, hashlib, base64, pyqrcode, requests, json, socks, log, sqlite3
+import time, re, os, sys, hashlib, base64, pyqrcode, requests, json, socks, log, sqlite3, csv
 import mwprocs, connections, ticons, bisurl
 
 from datetime import datetime
@@ -25,9 +25,9 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA
 
-mw_version = "Test 0.11"
+mw_version = "Test 0.13"
 mw_copy = "The Bismuth Foundation 2018"
-mw_date = "24th May 2018"
+mw_date = "3rd June 2018"
 mw_author = "Ian McEvoy (Maccaspacca)"
 mw_license = "GPL-3.0"
 
@@ -99,11 +99,10 @@ try:
 
 		try:
 			s = socks.socksocket()
-			s.settimeout(3)
-
+			s.settimeout(5)
 			s.connect((ip, int(port)))
 			app_log.warning("Status: Wallet connected to {}".format(ip))
-
+			time.sleep(3)
 			connections.send(s, "statusget", 10)
 			statusget = connections.receive(s, 10)
 			myversion = statusget[7]
@@ -114,12 +113,15 @@ try:
 		except Exception as e:
 			app_log.warning("Status: Cannot connect to {}".format(ip))
 			time.sleep(1)
+			
+	print("Successful connection to {}".format(mynode))
 
 except:
+	app_log.warning("Status: Unable to connect so closing")
 	divvy = wx.App()
 	frame = wx.Frame(None, -1, "Connection")
 	frame.SetSize(0,0,200,50)
-	dlg = wx.MessageDialog(frame, "Wallet cannot connect to the node", "Connection Error", wx.OK | wx.ICON_WARNING)
+	dlg = wx.MessageDialog(frame, "Wallet cannot connect to a node", "Connection Error", wx.OK | wx.ICON_ERROR)
 	dlg.ShowModal()
 	dlg.Destroy()
 	frame.Destroy()
@@ -130,10 +132,6 @@ def do_zero(zero_in):
 	
 	global view_all
 	view_all = zero_in
-	#if zero_in:
-	#	view_all = "true"
-	#else:
-	#	view_all = "false"
 	
 def ask(parent, message='', title='', default_value = ''):
 	dlg = wx.TextEntryDialog(parent, message, title, default_value)
@@ -415,14 +413,15 @@ class PageOne(wx.Window):
 				debits = '%.8f' % float(stats_account[2])
 				rewards = '%.8f' % float(stats_account[4])
 				fees = '%.8f' % float(stats_account[3])
-				iscrypted = int(mwprocs.readcrypt(a)[0][0])
-				ishd = int(mwprocs.readcrypt(a)[0][1])
+				tcrypt = mwprocs.readcrypt(a)
+				iscrypted = int(tcrypt[0][0])
+				ishd = int(tcrypt[0][1])
 				if iscrypted == 1:
 					state = "Yes"
 				elif iscrypted == 0:
 					state = "No"
 				else:
-					state = ""
+					state = "N/A"
 					
 				if ishd == 1:
 					hdtype = "HD Seed"
@@ -521,8 +520,10 @@ class PageOne(wx.Window):
 		menu = wx.Menu()
 		menu.Append(1, "Copy Address")
 		menu.Append(2, "Get More Information")
+		menu.Append(3, "Export TX's to CSV")
 		menu.Bind(wx.EVT_MENU, self.CopyItems, id=1)
 		menu.Bind(wx.EVT_MENU, self.OnAbout, id=2)
+		menu.Bind(wx.EVT_MENU, self.OnCSV, id=3)
 		self.PopupMenu(menu)
 
 	def CopyItems(self, event):
@@ -539,6 +540,44 @@ class PageOne(wx.Window):
 		wx.TheClipboard.Close()
 
 		print("Items are on the clipboard")
+		
+	
+	def OnCSV(self,event):
+
+		for i in range(self.list_ctrl1.GetItemCount()):
+			if self.list_ctrl1.IsSelected(i):
+				myaddress = self.list_ctrl1.GetItemText(i,1)
+				print(myaddress)
+				
+		connections.send (s, "addlist", 10)  # senders
+		connections.send (s, myaddress, 10)
+
+		tx_list = connections.receive (s, 10)
+		#print(tx_list)
+		
+		dlgi = wx.FileDialog(None, "Select CSV file", "", "","CSV Files (*.csv)|*.csv")
+
+		if dlgi.ShowModal() == wx.ID_OK:
+			result = dlgi.GetPath()
+		else:
+			result = ""
+		dlgi.Destroy()
+		
+		if result == "":
+			msgbox = wx.MessageDialog(None,"Nothing done !","Export TX's to CSV",wx.ICON_INFORMATION)
+			msgbox.ShowModal()
+			msgbox.Destroy()
+		else:		
+			with open(result, 'w', newline='') as csvfile:
+				for transaction in tx_list:
+					writer = csv.writer (csvfile, quoting=csv.QUOTE_MINIMAL)
+					writer.writerow ([transaction[0], transaction[1], transaction[3], transaction[4], transaction[5], transaction[6], transaction[7], transaction[8], transaction[9], transaction[10], transaction[11]])
+
+			msgbox = wx.MessageDialog(None,"TX's experoted to CSV at {}".format(result),"Export TX's to CSV",wx.ICON_INFORMATION)
+			msgbox.ShowModal()
+			msgbox.Destroy()
+			
+		return
 		
 	def OnEraseBackground(self, evt):
 		"""
@@ -640,7 +679,7 @@ class PageTwo(wx.Window):
 				
 		self.myimage = ticons.bismuthlogo.GetBitmap()
 		self.image1 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(self.myimage))
-		self.topbox1.Add(self.image1, 0, wx.ALL|wx.RIGHT, 10)
+		self.topbox1.Add(self.image1, 0, wx.ALL|wx.CENTER, 10)
 		
 		self.box1.Add(self.topbox1, 0, wx.ALL|wx.CENTER, 10)
 		
@@ -839,7 +878,7 @@ class PageTwo(wx.Window):
 					self.list_ctrl1.SetItem(index, 6, str(mybacon[i][5][:56])) # txid
 					self.list_ctrl1.SetItem(index, 7, str(mybacon[i][7])) # hash
 					self.list_ctrl1.SetItem(index, 8, str(mybacon[i][8])) # fee
-					self.list_ctrl1.SetItem(index, 9, str(mybacon[i][11][:1000])) # reward
+					self.list_ctrl1.SetItem(index, 9, str(mybacon[i][11][:1000])) # openfield
 					self.list_ctrl1.SetItemBackgroundColour(item=index, col=color_cell)
 					self.list_ctrl1.SetItemData(index,index)
 
@@ -853,7 +892,7 @@ class PageTwo(wx.Window):
 	def DoAddys(self):
 		addylist = mwprocs.readaddys() #reads all addresses from wallet.dat
 		#print(len(addylist))
-		if view_all or len(addylist) == 1 :
+		if view_all or len(addylist) == 1:
 			self.alladdys = sorted([a[0] for a in addylist])
 		else:
 			self.alladdys = sorted([a[0] for a in addylist if float(get_my_bal(a[0])[0]) > 0])
@@ -867,7 +906,7 @@ class PageThree(wx.Panel):
 		
 		self.DoAddys()
 	
-		self.myaddress = self.alladdys[0] # uses first address if none selected
+		self.myaddress = self.thisalladdys[0] # uses first address if none selected
 		self.MyTickState = False
 		
 		l_text1 = wx.StaticText(self, -1, "Send Bismuth")
@@ -1153,9 +1192,10 @@ class PageThree(wx.Panel):
 
 	def DoAddys(self):
 		addylist = mwprocs.readaddys() #reads all addresses from wallet.dat
+		
 		self.thisalladdys = [a[0] for a in addylist]
 		self.alladdys = []
-
+		
 		for z in self.thisalladdys:
 		
 			try:
@@ -1339,7 +1379,7 @@ class PageFour(wx.Panel):
 		self.image1 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(self.myimage))
 		self.box1.Add(self.image1, 0, wx.ALL|wx.CENTER, 5)
 		
-		self.lt3 = wx.TextCtrl(self, -1, "", size=(650,-1), style=wx.BORDER_NONE|wx.TE_READONLY|wx.TE_MULTILINE)
+		self.lt3 = wx.TextCtrl(self, -1, "", size=(650,-1), style=wx.BORDER_SIMPLE|wx.TE_READONLY|wx.TE_MULTILINE)
 		self.lt3.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.lt3.SetBackgroundColour("#FFFFFF")
 		self.lt3.SetForegroundColour(wx.BLACK)
@@ -1499,7 +1539,8 @@ class MainFrame(wx.Frame):
 		self.m_set = wx.Menu()
 		
 		self.m_set.AppendCheckItem(302, '&View Zero Balances', 'View addresses with zero balance')
-		self.m_set.Check(302,False)
+		
+		self.m_set.Check(302,view_all)
 				
 		menubar.Append(self.m_set, '&Settings')
 		
@@ -1642,16 +1683,15 @@ class MainFrame(wx.Frame):
 
 		if dlg.ShowModal() == wx.ID_OK:
 			addy_sel = dlg.GetStringSelection()
-			busyDlg = wx.BusyInfo("Busy decrypting.......")
 
 			dlg.Destroy()
 			
 			if mwprocs.dec_all(addy_sel):
-				busyDlg = None
+
 				msgbox = wx.MessageDialog(None,"Address Decrypted","Address Decryption",wx.ICON_INFORMATION)
 				msgbox.ShowModal()
 			else:
-				busyDlg = None
+
 				msgbox = wx.MessageDialog(None,"Decryption failed","Address Decryption",wx.ICON_ERROR)
 				msgbox.ShowModal()
 		else:
@@ -1729,7 +1769,7 @@ class MainFrame(wx.Frame):
 		
 	def proc_seed(self, myseed, address):
 	
-		dlgp = wx.TextEntryDialog(None, 'Address: {}\n\n{}\n\nIf you typed a password when the seed was created paste it below and click OK\n\nClick ok or cancel if none'.format(address,myseed),'Seed Import', '')
+		dlgp = wx.TextEntryDialog(None, 'Address: {}\n\n{}\n\nIf you typed a password when the seed was created type or paste it below and click OK\n\nClick ok or cancel if none'.format(address,myseed),'Seed Import', '')
 		
 		if dlgp.ShowModal() == wx.ID_OK:
 			mypass = str(dlgp.GetValue())
