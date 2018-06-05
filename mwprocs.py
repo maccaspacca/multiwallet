@@ -1,7 +1,7 @@
 """
  Bismuth Multiple Address Wallet (Procedures Module)
- Version 0.0.4 (Dev)
- Date 03/06/2018
+ Version RC 1.0
+ Date 05/06/2018
  Copyright Maccaspacca 2018
  Copyright Bismuth Foundation 2016 to 2018
  Author Maccaspacca

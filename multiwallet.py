@@ -1,7 +1,7 @@
 """
  Bismuth GUI Multiple Address Wallet
- Version Test 0.13
- Date 3rd June 2018
+ Version RC 1.0
+ Date 5th June 2018
  Copyright Maccaspacca 2018
  Copyright Bismuth Foundation 2016 to 2018
  Author Ian McEvoy (Maccaspacca)
@@ -25,9 +25,9 @@ from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.Hash import SHA
 
-mw_version = "Test 0.13"
+mw_version = "RC 1.0"
 mw_copy = "The Bismuth Foundation 2018"
-mw_date = "3rd June 2018"
+mw_date = "5th June 2018"
 mw_author = "Ian McEvoy (Maccaspacca)"
 mw_license = "GPL-3.0"
 
@@ -99,7 +99,7 @@ try:
 
 		try:
 			s = socks.socksocket()
-			s.settimeout(5)
+			s.settimeout(10)
 			s.connect((ip, int(port)))
 			app_log.warning("Status: Wallet connected to {}".format(ip))
 			time.sleep(3)
@@ -150,11 +150,30 @@ a_txt = "Version: {}\nAuthor: {}\nCopyright: {}\nPublished: {}\nLicense: {}".for
 w_txt = """1. Select an address from the drop down list.
 		2. Click on a transaction in the list to get more information.
 		3. Information refreshes every 10 seconds."""
+		
+o_txt = """1. This page gives you a list of the addresses stored in the wallet.
+		2. Click the 'Settings' menu to toggle viewing of addresses with zero balances.
+		3. The total confirmed balance does not include transactions in the mempool.
+		4. Click or right click on an address for further options."""
+		
+s_txt = """1. Select an address from the drop down list.
+		2. Enter an amount to send (or tick 'send all').
+		3. If the transaction is a plugin operation tx then tick the box to show operation field.
+		4. Enter openfield data if needed.
+		5. Click send
+		6. You can import a bis:// format url if you wish
+		7. The reset button is used to clear all fields ready for new input."""
+		
+r_txt = """1. The information created here can be given to people so they can pay you in Bismuth.
+		2. Select an existing Bismuth address from the drop down list or tick generate a new address.
+		3. Fill in the form and click 'Request Payment'
+		4. A QR code and a 'bis://pay/' style url are created
+		5. The url can be copied to clipboard for sending to others
+		6. The reset button is used to clear all fields ready for new input."""
 
 def updatestatus(newstatus,newplace):
 	evt = UpdateStatusEvent(msg = newstatus, st_id = int(newplace))
 	wx.PostEvent(statusbar,evt)
-	
 	
 def tgetvars(mytemp,mytitle):
 
@@ -172,7 +191,8 @@ def tgetvars(mytemp,mytitle):
 	tempsis = tempsis + "<tr><td align='right' bgcolor='#DAF7A6'><b>TXID:</b></td><td bgcolor='#D0F7C3'>{}</td></tr>".format(mytemp[6])
 	tempsis = tempsis + "<tr><td align='right' bgcolor='#DAF7A6'><b>Hash:</b></td><td bgcolor='#D0F7C3'>{}</td></tr>".format(mytemp[7])
 	tempsis = tempsis + "<tr><td align='right' bgcolor='#DAF7A6'><b>Fee:</b></td><td bgcolor='#D0F7C3'>{}</td></tr>".format(mytemp[8])
-	tempsis = tempsis + "<tr><td align='right' bgcolor='#DAF7A6'><b>Openfield:</b></td><td bgcolor='#D0F7C3'>{}</td></tr>".format(mytemp[9])
+	tempsis = tempsis + "<tr><td align='right' bgcolor='#DAF7A6'><b>Operation:</b></td><td bgcolor='#D0F7C3'>{}</td></tr>".format(mytemp[9])
+	tempsis = tempsis + "<tr><td align='right' bgcolor='#DAF7A6'><b>Openfield:</b></td><td bgcolor='#D0F7C3'>{}</td></tr>".format(mytemp[10])
 	tempsis = tempsis + "</table>"
 	
 	transis.append(tempsis)
@@ -705,7 +725,8 @@ class PageTwo(wx.Window):
 		self.list_ctrl1.InsertColumn(6, 'txid', wx.LIST_FORMAT_LEFT)
 		self.list_ctrl1.InsertColumn(7, 'block_hash', wx.LIST_FORMAT_LEFT)
 		self.list_ctrl1.InsertColumn(8, 'fee', wx.LIST_FORMAT_LEFT)
-		self.list_ctrl1.InsertColumn(9, 'openfield', wx.LIST_FORMAT_LEFT)
+		self.list_ctrl1.InsertColumn(9, 'operation', wx.LIST_FORMAT_LEFT)
+		self.list_ctrl1.InsertColumn(10, 'openfield', wx.LIST_FORMAT_LEFT)
 		
 		self.list_ctrl1.SetColumnWidth(0, 0)
 		self.list_ctrl1.SetColumnWidth(1, 125)
@@ -717,6 +738,7 @@ class PageTwo(wx.Window):
 		self.list_ctrl1.SetColumnWidth(7, 0)
 		self.list_ctrl1.SetColumnWidth(8, 0)
 		self.list_ctrl1.SetColumnWidth(9, 0)
+		self.list_ctrl1.SetColumnWidth(10, 0)
 	
 		self.box1.Add(self.list_ctrl1, 0, wx.ALL|wx.CENTER, 10)
 
@@ -878,7 +900,8 @@ class PageTwo(wx.Window):
 					self.list_ctrl1.SetItem(index, 6, str(mybacon[i][5][:56])) # txid
 					self.list_ctrl1.SetItem(index, 7, str(mybacon[i][7])) # hash
 					self.list_ctrl1.SetItem(index, 8, str(mybacon[i][8])) # fee
-					self.list_ctrl1.SetItem(index, 9, str(mybacon[i][11][:1000])) # openfield
+					self.list_ctrl1.SetItem(index, 9, str(mybacon[i][10][:30])) # operation
+					self.list_ctrl1.SetItem(index, 10, str(mybacon[i][11][:100000])) # openfield
 					self.list_ctrl1.SetItemBackgroundColour(item=index, col=color_cell)
 					self.list_ctrl1.SetItemData(index,index)
 
@@ -908,6 +931,7 @@ class PageThree(wx.Panel):
 	
 		self.myaddress = self.thisalladdys[0] # uses first address if none selected
 		self.MyTickState = False
+		self.MyOpState = False
 		
 		l_text1 = wx.StaticText(self, -1, "Send Bismuth")
 		l_text1.SetFont(wx.Font(14, wx.SWISS, wx.NORMAL, wx.BOLD))
@@ -916,6 +940,7 @@ class PageThree(wx.Panel):
 	
 		vbox1 = wx.BoxSizer(wx.VERTICAL)
 		rbox1 = wx.BoxSizer(wx.VERTICAL)
+		tbox1 = wx.BoxSizer(wx.HORIZONTAL)
 		rbox2 = wx.BoxSizer(wx.VERTICAL)
 		rbox3 = wx.BoxSizer(wx.VERTICAL)
 		rbox4 = wx.BoxSizer(wx.VERTICAL)
@@ -942,15 +967,35 @@ class PageThree(wx.Panel):
 		
 		self.lt1 = wx.TextCtrl(self, size=(250, -1), style=wx.TE_PROCESS_ENTER)
 		self.lt1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.NORMAL))
+		self.lt1.SetValue("0")
 		
 		self.tb1 = wx.CheckBox(self, label = 'Send all?',pos = (10,10))
 		self.Bind(wx.EVT_CHECKBOX,self.OnChecked,self.tb1) 
 		self.tb1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.tb1.SetSize(self.tb1.GetBestSize())
 		
+		self.tb2 = wx.CheckBox(self, label = 'Operation?',pos = (10,10))
+		self.Bind(wx.EVT_CHECKBOX,self.OnOperate,self.tb2) 
+		self.tb2.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
+		self.tb2.SetSize(self.tb1.GetBestSize())
+		
+		tbox1.Add(self.tb1, 0, wx.ALL|wx.LEFT, 2)
+		tbox1.Add(self.tb2, 0, wx.ALL|wx.RIGHT, 2)
+		
+		self.l_optxt1 = wx.StaticText(self, -1, "Operation Text")
+		self.l_optxt1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
+		self.l_optxt1.SetSize(self.l_optxt1.GetBestSize())
+		self.l_optxt1.Hide()
+		
+		self.ot1 = wx.TextCtrl(self, size=(250, -1), style=wx.TE_PROCESS_ENTER)
+		self.ot1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.NORMAL))
+		self.ot1.Hide()
+		
 		rbox2.Add(self.l_text3, 0, wx.ALL|wx.LEFT, 2)
 		rbox2.Add(self.lt1, 0, wx.ALL|wx.LEFT, 2)
-		rbox2.Add(self.tb1, 0, wx.ALL|wx.LEFT, 2)
+		rbox2.Add(tbox1, 0, wx.ALL|wx.LEFT, 2)
+		rbox2.Add(self.l_optxt1, 0, wx.ALL|wx.LEFT, 2)
+		rbox2.Add(self.ot1, 0, wx.ALL|wx.LEFT, 2)		
 
 		l_text4 = wx.StaticText(self, -1, "Receiving address:")
 		l_text4.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
@@ -1034,9 +1079,20 @@ class PageThree(wx.Panel):
 
 	def OnSubmit(self, event):
 	
-		keep_input = 0
 		openfield_input = self.lt3.GetValue()
-		fee = '%.8f' % float(float(0.01) + (float(len(openfield_input)) / 100000) + int(keep_input))
+		
+		if self.MyOpState:
+			keep_input = self.ot1.GetValue()
+			keep_input = keep_input[:30]
+		else:
+			keep_input = 0
+		
+		fee = '%.8f' % float(float(0.01) + (float(len(openfield_input)) / 100000))
+		if openfield_input.startswith("token:issue:"):
+			fee = fee + 10
+		if openfield_input.startswith("alias="):
+			fee = fee + 1
+			
 		address = self.myaddress
 		if self.MyTickState:
 			amdo = '%.8f' % (Decimal(self.balance) - Decimal(fee))
@@ -1235,7 +1291,25 @@ class PageThree(wx.Panel):
 				self.l_text6.SetLabel("Import Successful")
 				self.lt1.SetValue(im_url[2])
 				self.lt2.SetValue(im_url[1])
-				self.lt3.SetValue(im_url[3])
+				
+				if im_url[3] == "":
+					if self.MyOpState:
+						self.tb2.SetValue(False)
+						self.MyOpState = False
+						self.ot1.SetValue("0")
+						self.OpStater()
+					else:
+						self.ot1.SetValue("0")
+				else:
+					if not self.MyOpState:
+						self.tb2.SetValue(True)
+						self.MyOpState = True
+						self.ot1.SetValue(im_url[3])
+						self.OpStater()
+					else:
+						self.ot1.SetValue(im_url[3])
+					
+				self.lt3.SetValue(im_url[4])
 				self.Layout()
 				return
 			else:
@@ -1256,6 +1330,26 @@ class PageThree(wx.Panel):
 			self.lt1.Enable(True)
 		#print(self.MyTickState)
 		
+	def OnOperate(self,event):
+		op = event.GetEventObject()
+		
+		self.MyOpState = op.GetValue()
+		
+		self.OpStater()
+		
+	def OpStater(self):
+
+		if self.MyOpState:
+			self.l_optxt1.Show()
+			self.ot1.Show()
+			self.Layout()
+			print("op ticked")
+		else:
+			self.l_optxt1.Hide()
+			self.ot1.Hide()
+			self.Layout()
+			print("op unticked")	
+		
 	def reset_me(self,event):
 		self.l_text6.SetForegroundColour(wx.BLACK)
 		self.l_text6.SetLabel("")
@@ -1265,12 +1359,18 @@ class PageThree(wx.Panel):
 		self.l_text8.SetLabel("")
 		self.l_text9.SetForegroundColour(wx.BLACK)
 		self.l_text9.SetLabel("")
-		self.lt1.SetValue("")
+		self.lt1.SetValue("0")
+		self.l_optxt1.Hide()
+		self.ot1.Hide()
+		self.ot1.SetValue("0")
+		self.MyOpState = False
+		self.MyTickState = False
 		self.lt1.Enable(True)
 		self.tb1.SetValue(False)
+		self.tb2.SetValue(False)
 		self.lt2.SetValue("")
 		self.lt3.SetValue("")
-		#self.Layout()
+		self.Layout()
 
 #--------------------------------------------------------------------------------
 
@@ -1295,12 +1395,12 @@ class PageFour(wx.Panel):
 		self.t_text1 = wx.StaticText(self, -1, "Receive Bismuth")
 		self.t_text1.SetFont(wx.Font(12, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.t_text1.SetSize(self.t_text1.GetBestSize())
-		self.box1.Add(self.t_text1, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.t_text1, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.w_text4 = wx.StaticText(self, -1, "Fill in the form and click Request Payment") # list title
 		self.w_text4.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.w_text4.SetSize(self.w_text4.GetBestSize())
-		self.box1.Add(self.w_text4, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.w_text4, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.newbox = wx.BoxSizer(wx.HORIZONTAL)
 
@@ -1308,21 +1408,21 @@ class PageFour(wx.Panel):
 		self.Bind(wx.EVT_CHECKBOX,self.onChecked,self.tb1) 
 		self.tb1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.tb1.SetSize(self.tb1.GetBestSize())
-		self.newbox.Add(self.tb1, 0, wx.ALL|wx.CENTER, 5)
+		self.newbox.Add(self.tb1, 0, wx.ALL|wx.CENTER, 2)
 		
-		self.box1.Add(self.newbox, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.newbox, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.c_text1 = wx.StaticText(self, -1, "OR")
 		self.c_text1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.c_text1.SetSize(self.c_text1.GetBestSize())
-		self.box1.Add(self.c_text1, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.c_text1, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.selectbox = wx.BoxSizer(wx.HORIZONTAL)
 					
 		self.cb = wx.StaticText(self, -1, "Select a Bismuth Address:")
 		self.cb.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.cb.SetSize(self.cb.GetBestSize())
-		self.selectbox.Add(self.cb, 0, wx.ALL|wx.CENTER, 5)
+		self.selectbox.Add(self.cb, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.l = wx.ComboBox(self, -1, size=(-1, -1), choices=self.alladdys, style=wx.CB_READONLY) # address list
 		self.Bind(wx.EVT_COMBOBOX, self.OnSelect, self.l)
@@ -1331,20 +1431,29 @@ class PageFour(wx.Panel):
 		self.l.SetForegroundColour(wx.BLACK)
 		self.l.SetBackgroundColour(wx.WHITE)
 		self.l.SetSize(self.l.GetBestSize())
-		self.selectbox.Add(self.l, 0, wx.ALL|wx.CENTER, 5)
+		self.selectbox.Add(self.l, 0, wx.ALL|wx.CENTER, 2)
 		
-		self.box1.Add(self.selectbox, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.selectbox, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.l_text1 = wx.StaticText(self, -1, "Amount (BIS):") 
 		self.l_text1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.l_text1.SetSize(self.l_text1.GetBestSize())
-		
-		#self.lt1 = wx.TextCtrl(self, size=(250, -1), style=wx.TE_PROCESS_ENTER)
+
 		self.lt1 = wx.lib.masked.NumCtrl(self, pos = (-1,-1), fractionWidth = 8) # for 8 decimal places.
 		self.lt1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.NORMAL))
 		
-		self.box1.Add(self.l_text1, 0, wx.ALL|wx.CENTER, 5)
-		self.box1.Add(self.lt1, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.l_text1, 0, wx.ALL|wx.CENTER, 2)
+		self.box1.Add(self.lt1, 0, wx.ALL|wx.CENTER, 2)
+		
+		self.l_optx1 = wx.StaticText(self, -1, "Enter 'Operation' text")
+		self.l_optx1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
+		self.l_optx1.SetSize(self.l_optx1.GetBestSize())
+		
+		self.ot1 = wx.TextCtrl(self, size=(250, -1), style=wx.TE_PROCESS_ENTER)
+		self.ot1.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.NORMAL))
+		
+		self.box1.Add(self.l_optx1, 0, wx.ALL|wx.CENTER, 2)
+		self.box1.Add(self.ot1, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.l_text2 = wx.StaticText(self, -1, "Enter openfield data (message):")
 		self.l_text2.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
@@ -1353,8 +1462,8 @@ class PageFour(wx.Panel):
 		self.lt2 = wx.TextCtrl(self, size=(400, 75), style=wx.TE_MULTILINE)
 		self.lt2.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.NORMAL))
 		
-		self.box1.Add(self.l_text2, 0, wx.ALL|wx.CENTER, 5)
-		self.box1.Add(self.lt2, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.l_text2, 0, wx.ALL|wx.CENTER, 2)
+		self.box1.Add(self.lt2, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.buttonbox = wx.BoxSizer(wx.HORIZONTAL)
 	
@@ -1364,27 +1473,27 @@ class PageFour(wx.Panel):
 		self.l_reset = wx.Button(self, wx.ID_APPLY, "Reset")
 		self.l_reset.Bind(wx.EVT_BUTTON, self.reset_me)
 		
-		self.buttonbox.Add(self.l_submit, 0, wx.ALL|wx.CENTER, 5)
-		self.buttonbox.Add(self.l_reset, 0, wx.ALL|wx.CENTER, 5)
-		self.box1.Add(self.buttonbox, 0, wx.ALL|wx.CENTER, 5)
+		self.buttonbox.Add(self.l_submit, 0, wx.ALL|wx.CENTER, 2)
+		self.buttonbox.Add(self.l_reset, 0, wx.ALL|wx.CENTER, 2)
+		self.box1.Add(self.buttonbox, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.l_text3 = wx.StaticText(self, -1, "")
 		self.l_text3.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.l_text3.SetSize(self.l_text3.GetBestSize())
 		
-		self.box1.Add(self.l_text3, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.l_text3, 0, wx.ALL|wx.CENTER, 2)
 	
 		size_h_w = 160
 		self.myimage = wx.Bitmap.FromRGBA(size_h_w, size_h_w, green=255, alpha=0)
 		self.image1 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(self.myimage))
-		self.box1.Add(self.image1, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.image1, 0, wx.ALL|wx.CENTER, 2)
 		
 		self.lt3 = wx.TextCtrl(self, -1, "", size=(650,-1), style=wx.BORDER_SIMPLE|wx.TE_READONLY|wx.TE_MULTILINE)
 		self.lt3.SetFont(wx.Font(10, wx.SWISS, wx.NORMAL, wx.BOLD))
 		self.lt3.SetBackgroundColour("#FFFFFF")
 		self.lt3.SetForegroundColour(wx.BLACK)
 		
-		self.box1.Add(self.lt3, 0, wx.ALL|wx.CENTER, 5)
+		self.box1.Add(self.lt3, 0, wx.ALL|wx.CENTER, 2)
 	
 		self.SetSizer(self.box1)
 		self.Layout()
@@ -1447,10 +1556,11 @@ class PageFour(wx.Panel):
 			
 			
 		myamount = str(self.lt1.GetValue())
-		mymessage = str(self.lt2.GetValue())
+		mymessage = str(self.lt2.GetValue())[:100000]
+		myoperation = str(self.ot1.GetValue())[:30]
 		
-		receive_str = bisurl.create_url(app_log, "pay", self.myaddress, myamount, mymessage)
-		
+		receive_str = bisurl.create_url(app_log, "pay", self.myaddress, myamount, myoperation, mymessage)
+				
 		if not this_fail:		
 			self.l_text3.SetForegroundColour(wx.RED)
 			self.l_text3.SetLabel("New address creation failed")
@@ -1465,6 +1575,13 @@ class PageFour(wx.Panel):
 			self.myimage = wx.Image('this_qr.png', wx.BITMAP_TYPE_ANY)
 			self.myimage = self.myimage.Scale(160,160)
 			self.image1.SetBitmap(wx.Bitmap(self.myimage))
+
+			clipdata = wx.TextDataObject()
+			clipdata.SetText("\n".join(receive_str))
+			clipdata.SetText(receive_str)
+			wx.TheClipboard.Open()
+			wx.TheClipboard.SetData(clipdata)
+			wx.TheClipboard.Close()
 			
 		self.Layout()
 		#print(receive_str)
@@ -1548,7 +1665,10 @@ class MainFrame(wx.Frame):
 
 		help = wx.Menu()
 		
-		help.Append(101, '&Transactions', 'Transaction Information')
+		help.Append(103, '&Overview', 'Overview Page Info')
+		help.Append(101, '&Transactions', 'Transactions Help')
+		help.Append(104, '&Send', 'Send Help')
+		help.Append(105, '&Receive', 'Receive Help')
 		help.Append(102, '&About', 'About this Program')
 		
 		menubar.Append(help, '&Help')
@@ -1557,6 +1677,9 @@ class MainFrame(wx.Frame):
 		
 		self.Bind(wx.EVT_MENU, self.OnAbout, id=101)
 		self.Bind(wx.EVT_MENU, self.OnAbout, id=102)
+		self.Bind(wx.EVT_MENU, self.OnAbout, id=103)
+		self.Bind(wx.EVT_MENU, self.OnAbout, id=104)
+		self.Bind(wx.EVT_MENU, self.OnAbout, id=105)
 		self.Bind(wx.EVT_MENU, self.OnQuit, m_exit)
 		self.Bind(wx.EVT_MENU, self.OnEncrypt, id=201)
 		self.Bind(wx.EVT_MENU, self.OnDecrypt, id=202)
@@ -1627,6 +1750,18 @@ class MainFrame(wx.Frame):
 		elif thisid == 102:
 			thistitle = "About Bismuth Multiwallet"
 			msgbox = wx.MessageDialog(None,a_txt,thistitle,wx.ICON_INFORMATION)
+			msgbox.ShowModal()
+		elif thisid == 103:
+			thistitle = "Overview Page Information"
+			msgbox = wx.MessageDialog(None,o_txt,thistitle,wx.ICON_INFORMATION)
+			msgbox.ShowModal()
+		elif thisid == 104:
+			thistitle = "Send Help"
+			msgbox = wx.MessageDialog(None,s_txt,thistitle,wx.ICON_INFORMATION)
+			msgbox.ShowModal()
+		elif thisid == 105:
+			thistitle = "Receive Help"
+			msgbox = wx.MessageDialog(None,r_txt,thistitle,wx.ICON_INFORMATION)
 			msgbox.ShowModal()
 
 	def updateStatus(self, msg):
